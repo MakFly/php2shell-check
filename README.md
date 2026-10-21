@@ -19,7 +19,7 @@ cd php2shell-check
 
 ## Why
 
-**php2shell** is the name given to two remote code execution flaws in PHP core: **CVE-2026-109618** and **CVE-2026-109619** (CVSS v4.0 9.2). The fix ships in the PHP security release of **October 21, 2026, 14:00 UTC**.
+**php2shell** is the name given to two remote code execution flaws in PHP core: **CVE-2026-109618** and **CVE-2026-109619** (CVSS v4.0 9.2). The fix ships in the PHP security release of **October 21, 2026, 14:00 UTC** (16:00 in Paris, CEST).
 
 No configuration workaround is confirmed: **only upgrading PHP fixes it**. These scripts answer three questions: what is still vulnerable, how to fix it, and what to watch in the meantime.
 
@@ -114,7 +114,7 @@ Replaces each `image@sha256:` with the current digest of its tag, **only if** th
 SHIP_TO=user@node ./frankenphp-selfbuild.sh 8.4.27   # docker load on a remote node
 ```
 
-Stopgap: builds a FrankenPHP image on the fixed `php:X.Y.Z-zts` image, without waiting for the upstream daily rebuild (04:00 UTC). Arguments: `PHP_VERSION [OS] [FRANKENPHP_TAG]`. Runs a real multi-stage build (clones `php/frankenphp` into `build/`, then `docker buildx bake`). Exit code `1` if the requested version is not the fixed one, or if the official image is not on Docker Hub yet.
+Stopgap: builds a FrankenPHP image on the fixed `php:X.Y.Z-zts` image, without waiting for the upstream daily rebuild (04:00 UTC, 06:00 in Paris). Arguments: `PHP_VERSION [OS] [FRANKENPHP_TAG]`. Runs a real multi-stage build (clones `php/frankenphp` into `build/`, then `docker buildx bake`). Exit code `1` if the requested version is not the fixed one, or if the official image is not on Docker Hub yet.
 
 ### watch.sh: observe mode
 
