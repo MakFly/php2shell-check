@@ -111,11 +111,25 @@ DRY_RUN=1 ./docker-bump.sh path/to/Dockerfile   # print only
 
 Replaces each `image@sha256:` with the current digest of its tag, **only if** that image ships the fixed version. Otherwise the old pin is kept and the exit code is `1`.
 
+### php-selfbuild.sh: patched php base before Docker Hub
+
+```bash
+./php-selfbuild.sh 8.4.27 trixie zts       # -> php-patched:8.4.27-zts-trixie
+./php-selfbuild.sh 8.5.12 alpine3.24 cli   # -> php-patched:8.5.12-cli-alpine3.24
+```
+
+Stopgap for the hours when php.net has released the fix but the official `php` images are not rebuilt yet. Takes the docker-library Dockerfile of the branch, bumps it to the fixed release, checks the tarball against the sha256 published by php.net (the Dockerfile also verifies the GPG signature), builds it and checks the PHP version. Then rebuild a project on it without editing its Dockerfile:
+
+```bash
+docker buildx build --load --build-context php:8.5-cli-alpine=docker-image://php-patched:8.5.12-cli-alpine3.24 -t my-api .
+```
+
 ### frankenphp-selfbuild.sh: FrankenPHP without waiting
 
 ```bash
 ./frankenphp-selfbuild.sh 8.4.27 trixie v1.13.1
 SHIP_TO=user@node ./frankenphp-selfbuild.sh 8.4.27   # docker load on a remote node
+PHP_BASE=php-patched:8.4.27-zts-trixie ./frankenphp-selfbuild.sh 8.4.27   # on a php-selfbuild.sh base
 ```
 
 Stopgap: builds a FrankenPHP image on the fixed `php:X.Y.Z-zts` image, without waiting for the upstream daily rebuild (04:00 UTC, 06:00 in Paris). Arguments: `PHP_VERSION [OS] [FRANKENPHP_TAG]`. Runs a real multi-stage build (clones `php/frankenphp` into `build/`, then `docker buildx bake`). Exit code `1` if the requested version is not the fixed one, or if the official image is not on Docker Hub yet.
@@ -140,6 +154,7 @@ Loops until interrupted (Ctrl+C) and prints an `ALERT` line whenever a shell or 
 | `NO_PULL` | `docker-scan.sh` | When set, does not pull images nor read their PHP version. |
 | `STALE_DAYS` | `docker-scan.sh` | Age in days after which a Docker Hub tag counts as frozen. Default: `30`. |
 | `DRY_RUN` | `docker-bump.sh` | When set, prints the changes without editing files. |
+| `PHP_BASE` | `frankenphp-selfbuild.sh` | Local php base image (from `php-selfbuild.sh`) used instead of `php:X.Y.Z-zts-OS` from Docker Hub. |
 | `SHIP_TO` | `frankenphp-selfbuild.sh` | SSH target (`user@node`) where the built image is loaded with `docker load`. |
 | `INTERVAL` | `watch.sh` | Seconds between two scans. Default: `2`. |
 
