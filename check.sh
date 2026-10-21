@@ -7,6 +7,7 @@
 set -uo pipefail
 source "$(dirname "$0")/lib.sh"
 status=0
+PHP_SERVICES=()
 
 check_deb() {
   command -v dpkg-query >/dev/null || return 0
@@ -55,9 +56,53 @@ check_docker() {
     ver=$(docker exec "$name" php -r 'echo PHP_VERSION;' 2>/dev/null) ||
       ver=$(docker exec "$name" frankenphp php-cli -r 'echo PHP_VERSION;' 2>/dev/null) || continue
     verdict "docker $name" "$ver" || status=1
+    [[ "$name" == *.*.* ]] && PHP_SERVICES+=("${name%%.*}")   # Swarm task: <service>.<slot>.<id>
   done < <(docker ps --format '{{.Names}}')
 }
 
-echo "== php2shell-check : $CVES (release $RELEASE_DATE) =="
-check_deb; check_rpm; check_apk; check_binaries; check_docker
+# A package upgrade protects nothing until the PHP processes restart: a running
+# process keeps the old binary or libphp mapped, which /proc shows as "(deleted)".
+# Long-lived CLI workers (queue:work, schedulers) count too.
+check_processes() {
+  local pid ppid comm pcomm exe stale=0 fresh=0 unreadable=0
+  while read -r pid ppid comm; do
+    [[ "$comm" =~ ^(php[0-9.]*|php-fpm[0-9.]*|php-cgi[0-9.]*|apache2|httpd|frankenphp)$ ]] || continue
+    pcomm=$(ps -o comm= -p "$ppid" 2>/dev/null)
+    [[ "$pcomm" == "$comm" ]] && continue                     # worker of an already listed master
+    if ! exe=$(readlink "/proc/$pid/exe" 2>/dev/null); then unreadable=$((unreadable + 1)); continue; fi
+    if [[ "$exe" == *" (deleted)" ]] || grep -qE 'php[^ ]* \(deleted\)$' "/proc/$pid/maps" 2>/dev/null; then
+      red "[VULN] process $comm (pid $pid) tourne encore sur l'ancien PHP : le redémarrer"; stale=$((stale + 1)); status=1
+    else
+      fresh=$((fresh + 1))
+    fi
+  done < <(ps -eo pid=,ppid=,comm=)
+  [[ $fresh -gt 0 && $stale -eq 0 ]] && green "[OK]   $fresh process PHP chargent le binaire installé"
+  [[ $unreadable -gt 0 ]] && { yellow "[??]   $unreadable process PHP illisibles (/proc) : relancer avec sudo"; status=1; }
+}
+
+# Swarm: the fixed image only protects once every running task of a PHP
+# service uses it. An update still running, paused or rolled back leaves old
+# replicas serving. Only services seen running PHP on this node are checked.
+check_swarm() {
+  command -v docker >/dev/null || return 0
+  [[ $(docker info --format '{{.Swarm.LocalNodeState}} {{.Swarm.ControlAvailable}}' 2>/dev/null) == "active true" ]] || return 0
+  local svc spec state img ok=0
+  for svc in $(printf '%s\n' "${PHP_SERVICES[@]}" | sort -u); do
+    spec=$(docker service inspect -f '{{.Spec.TaskTemplate.ContainerSpec.Image}}' "$svc")
+    state=$(docker service inspect -f '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}' "$svc")
+    case "$state" in
+      updating|paused|rollback_started|rollback_paused|rollback_completed)
+        red "[VULN] service $svc : mise à jour $state, l'image voulue ne tourne pas partout"; status=1; continue ;;
+    esac
+    while read -r img; do
+      same_image "$img" "$spec" && continue
+      red "[VULN] service $svc : une tâche tourne encore sur $img"; status=1; continue 2
+    done < <(docker service ps "$svc" --filter desired-state=running --format '{{.Image}}')
+    ok=$((ok + 1))
+  done
+  [[ $ok -gt 0 ]] && green "[OK]   $ok services Swarm convergés sur leur image"
+}
+
+echo "== php2shell-check : $CVES (release $RELEASE_DATE${FIXED_VERSIONS:+, versions corrigées $FIXED_VERSIONS}) =="
+check_deb; check_rpm; check_apk; check_binaries; check_processes; check_docker; check_swarm
 exit $status

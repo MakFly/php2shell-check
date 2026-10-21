@@ -17,3 +17,30 @@ $D ps --format '{{.Names}}|{{.Image}}' 2>/dev/null | while IFS='|' read -r n i; 
   v=$($D exec "$n" php -r 'echo PHP_VERSION;' 2>/dev/null) || v=$($D exec "$n" frankenphp php-cli -r 'echo PHP_VERSION;' 2>/dev/null) || continue
   echo "ctr $n $v $i"
 done
+S=""; [ "$(id -u)" = 0 ] || S="sudo -n"
+ps -eo pid=,ppid=,comm= | while read -r pid ppid comm; do
+  case "$comm" in php|php[0-9]*|php-fpm*|php-cgi*|apache2|httpd|frankenphp) ;; *) continue ;; esac
+  [ "$(ps -o comm= -p "$ppid" 2>/dev/null)" = "$comm" ] && continue
+  exe=$($S readlink "/proc/$pid/exe" 2>/dev/null) || { echo "proc unreadable $pid $comm"; continue; }
+  if echo "$exe" | grep -q ' (deleted)$' || $S grep -qE 'php[^ ]* \(deleted\)$' "/proc/$pid/maps" 2>/dev/null; then
+    echo "proc stale $pid $comm"
+  else
+    echo "proc fresh $pid $comm"
+  fi
+done
+# Swarm convergence, only for services whose tasks run PHP on this node.
+if [ "$($D info --format '{{.Swarm.LocalNodeState}} {{.Swarm.ControlAvailable}}' 2>/dev/null)" = "active true" ]; then
+  for svc in $($D ps --format '{{.Names}}' | grep -E '^[^.]+\.[0-9]+\.' | cut -d. -f1 | sort -u); do
+    $D exec "$($D ps -q -f "name=^$svc\." | head -1)" sh -c 'command -v php || command -v frankenphp' >/dev/null 2>&1 || continue
+    spec=$($D service inspect -f '{{.Spec.TaskTemplate.ContainerSpec.Image}}' "$svc")
+    state=$($D service inspect -f '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}' "$svc")
+    old=""
+    for img in $($D service ps "$svc" --filter desired-state=running --format '{{.Image}}'); do
+      case "$img@$spec" in
+        *@sha256:*@*@sha256:*) [ "${img#*@}" = "${spec#*@}" ] || old=$img ;;
+        *) [ "${img%@*}" = "${spec%@*}" ] || old=$img ;;
+      esac
+    done
+    echo "swarm $svc ${state:-none} ${old:-converged}"
+  done
+fi

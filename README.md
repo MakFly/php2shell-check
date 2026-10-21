@@ -32,6 +32,9 @@ Nothing is hardcoded for a given environment:
 - **End-of-life branches** (7.x, 8.0, 8.1): detected through php.net's `supported_versions` list and reported `[VULN]`, since they will get no fix.
 - **Distro packages**: Debian/Ubuntu and RHEL backport fixes without bumping the version number. A package is therefore judged on its changelog (CVEs cited) **or** on its upstream version (Alpine, Sury, Remi).
 - **Docker**: `php` and FrankenPHP containers, plus frozen tags spotted from their last push date on Docker Hub.
+- **Strict mode**: once the official advisory is out, `FIXED_VERSIONS` pins the exact fixed releases, so no heuristic is involved.
+- **Fix actually loaded**: an upgraded package protects nothing until PHP restarts. Each PHP process (php-fpm, Apache, FrankenPHP, long-lived CLI workers) is checked through `/proc`: a process still mapping a replaced binary or `libphp` is reported `[VULN]`.
+- **Deployment converged**: for Docker Swarm services running PHP, every running task must use the service image, and an update that is still running, paused or rolled back is reported `[VULN]`.
 
 ## Requirements
 
@@ -66,7 +69,7 @@ Each result line starts with a status:
 sudo ./check.sh   # if the Docker socket requires privileges
 ```
 
-Checks deb, rpm and apk packages, binaries outside any package (source builds, `/opt`, asdf, Homebrew...) and running containers. Exit code `0` if everything is patched, `1` if at least one runtime is vulnerable or unknown.
+Checks deb, rpm and apk packages, binaries outside any package (source builds, `/opt`, asdf, Homebrew...), PHP processes still running an old binary, running containers, and Swarm convergence of PHP services. Run it with `sudo` to read every process in `/proc`. Exit code `0` if everything is patched, `1` if at least one runtime is vulnerable or unknown.
 
 ### apply.sh: apply the fix on this host
 
@@ -84,7 +87,7 @@ cp servers.txt.example servers.txt   # one SSH target per line
 ./servers-check.sh web-01 ops@203.0.113.10   # or explicit hosts
 ```
 
-Pipes `probe.sh` (read-only, POSIX sh) to each target over SSH and judges what it finds: binaries, packages, containers. Nothing is installed remotely. For a distro package, the upstream version may hide a backport: the script then prints `[??]` and asks you to run `check.sh` on that host.
+Pipes `probe.sh` (read-only, POSIX sh) to each target over SSH and judges what it finds: binaries, packages, containers, PHP processes not restarted since the upgrade, Swarm services not converged. Nothing is installed remotely. For a distro package, the upstream version may hide a backport: the script then prints `[??]` and asks you to run `check.sh` on that host.
 
 Exit codes: `0` everything is patched, `1` at least one server is unreachable, vulnerable or unknown, `2` if `servers.txt` is missing (and no host is passed as an argument).
 
@@ -132,6 +135,7 @@ Loops until interrupted (Ctrl+C) and prints an `ALERT` line whenever a shell or 
 |---|---|---|
 | `RELEASE_DATE` | all (through `lib.sh`) | Date of the security release carrying the fix. Default: `2026-10-21`. |
 | `CVES` | all (through `lib.sh`) | CVEs a distro changelog must cite. Default: `CVE-2026-109618 CVE-2026-109619`. Change it if the official advisory differs. |
+| `FIXED_VERSIONS` | all (through `lib.sh`) | Strict mode: fixed releases of the official advisory, e.g. `"8.2.35 8.3.36 8.4.27 8.5.12"`. php.net is not queried, and a branch missing from the list has no fix. |
 | `NO_COLOR` | all (through `lib.sh`) | When set, disables colors. |
 | `NO_PULL` | `docker-scan.sh` | When set, does not pull images nor read their PHP version. |
 | `STALE_DAYS` | `docker-scan.sh` | Age in days after which a Docker Hub tag counts as frozen. Default: `30`. |

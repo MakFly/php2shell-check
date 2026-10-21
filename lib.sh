@@ -2,7 +2,11 @@
 # Override from the environment if the advisory changes:
 #   RELEASE_DATE  date of the PHP security release carrying the fix
 #   CVES          CVE identifiers a distro changelog must cite
+#   FIXED_VERSIONS  strict mode: the fixed releases of the official advisory,
+#                   e.g. "8.2.35 8.3.36 8.4.27 8.5.12". When set, php.net is not
+#                   asked and a branch missing from the list has no fix.
 RELEASE_DATE="${RELEASE_DATE:-2026-10-21}"
+FIXED_VERSIONS="${FIXED_VERSIONS:-}"
 CVES="${CVES:-CVE-2026-109618 CVE-2026-109619}"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -19,7 +23,9 @@ fi
 declare -A FIXED
 upstream_fixed() {
   local branch="$1" json ver date
-  if [[ -z "${FIXED[$branch]+x}" ]]; then
+  if [[ -z "${FIXED[$branch]+x}" && -n "$FIXED_VERSIONS" ]]; then
+    FIXED[$branch]=$(tr ' ' '\n' <<<"$FIXED_VERSIONS" | grep -m1 "^${branch//./\\.}\." || true)
+  elif [[ -z "${FIXED[$branch]+x}" ]]; then
     FIXED[$branch]=""
     if json=$(curl -fsS --max-time 15 "https://www.php.net/releases/index.php?json&version=${branch}"); then
       ver=$(sed -n 's/.*"version":"\([0-9.]*\)".*/\1/p' <<<"$json")
@@ -51,7 +57,10 @@ verdict() {
   local label="$1" ver="$2" branch fixed
   branch=$(cut -d. -f1,2 <<<"$ver")
   upstream_fixed "$branch"; fixed=${FIXED[$branch]}
-  if [[ -z "$fixed" ]] && ! branch_supported "$branch"; then
+  if [[ -z "$fixed" && -n "$FIXED_VERSIONS" ]]; then
+    red    "[VULN] $label $ver (branche $branch absente de FIXED_VERSIONS : aucun fix officiel)"
+    return 1
+  elif [[ -z "$fixed" ]] && ! branch_supported "$branch"; then
     red    "[VULN] $label $ver (branche $branch en fin de vie : aucun fix officiel, migrer vers une branche supportée)"
     return 1
   elif [[ -z "$fixed" ]]; then
@@ -83,6 +92,12 @@ verdict_pkg() {
   verdict "$label" "$up" && return 0
   red "       ni le changelog ni la version upstream ne portent le fix : mettre à jour le paquet"
   return 1
+}
+
+# same_image A B: same digest when both carry one, otherwise same name:tag.
+same_image() {
+  [[ -z "$1" ]] && return 0
+  if [[ "$1" == *@sha256:* && "$2" == *@sha256:* ]]; then [[ "${1#*@}" == "${2#*@}" ]]; else [[ "${1%@*}" == "${2%@*}" ]]; fi
 }
 
 # True when PATH belongs to a distro package (then the package check covers it).
