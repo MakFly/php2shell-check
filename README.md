@@ -4,6 +4,7 @@ Check, then apply, the **php2shell** fix on your PHP runtimes: system packages, 
 
 ![Shell: Bash](https://img.shields.io/badge/shell-Bash-4EAA25?logo=gnubash&logoColor=white)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational?logo=linux&logoColor=white)
+![License: MIT](https://img.shields.io/badge/license-MIT-yellow)
 ![CVE-2026-109618](https://img.shields.io/badge/CVE-2026--109618-critical-red)
 ![CVE-2026-109619](https://img.shields.io/badge/CVE-2026--109619-critical-red)
 
@@ -176,4 +177,4 @@ sh -n probe.sh
 
 ## License
 
-Not defined yet.
+[MIT](LICENSE) © 2026 MakFly
