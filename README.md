@@ -1,15 +1,11 @@
 # php2shell-check
 
-Vérifie, puis applique, le correctif **php2shell** sur vos runtimes PHP : paquets système, binaires, conteneurs Docker (FrankenPHP inclus) et serveurs distants en SSH.
+Check, then apply, the **php2shell** fix on your PHP runtimes: system packages, standalone binaries, Docker containers (FrankenPHP included) and remote servers over SSH.
 
 ![Shell: Bash](https://img.shields.io/badge/shell-Bash-4EAA25?logo=gnubash&logoColor=white)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational?logo=linux&logoColor=white)
 ![CVE-2026-109618](https://img.shields.io/badge/CVE-2026--109618-critical-red)
 ![CVE-2026-109619](https://img.shields.io/badge/CVE-2026--109619-critical-red)
-
-## English TL;DR
-
-Bash scripts that tell you, host by host and image by image, whether your PHP runtimes carry the fix for **php2shell** (CVE-2026-109618 and CVE-2026-109619, two critical RCE flaws in PHP core, CVSS v4.0 9.2, PHP security release of 2026-10-21 14:00 UTC), and that help you apply it. The fixed version is read live from php.net, nothing is hardcoded per environment. Output is in French, the scripts are read-only except `apply.sh`, `docker-bump.sh` and `frankenphp-selfbuild.sh`.
 
 ```bash
 git clone https://github.com/MakFly/php2shell-check.git
@@ -19,29 +15,29 @@ cd php2shell-check
 ./docker-scan.sh ~/code             # Dockerfiles and compose files of a folder
 ```
 
-Exit code `0` means everything is patched, `1` means at least one runtime is vulnerable or unknown. Linux only (GNU `date`, bash 4+, `curl`).
+> Script output is in French. The status markers (`[OK]`, `[VULN]`, `[??]`) and exit codes are language-neutral.
 
-## Pourquoi / contexte
+## Why
 
-**php2shell** regroupe deux failles d'exécution de code à distance dans le cœur de PHP : **CVE-2026-109618** et **CVE-2026-109619** (CVSS v4.0 9.2). Le correctif est livré par la release de sécurité PHP du **21 octobre 2026, 14:00 UTC**.
+**php2shell** is the name given to two remote code execution flaws in PHP core: **CVE-2026-109618** and **CVE-2026-109619** (CVSS v4.0 9.2). The fix ships in the PHP security release of **October 21, 2026, 14:00 UTC**.
 
-Aucun contournement par configuration n'est confirmé : **seule la mise à jour de PHP corrige**. Ces scripts répondent à trois questions : qui est encore vulnérable, comment le corriger, et que surveiller en attendant.
+No configuration workaround is confirmed: **only upgrading PHP fixes it**. These scripts answer three questions: what is still vulnerable, how to fix it, and what to watch in the meantime.
 
-## Fonctionnalités
+## Features
 
-Rien n'est codé en dur pour un environnement :
+Nothing is hardcoded for a given environment:
 
-- **Version corrigée** : lue en direct sur php.net, par branche (8.2 à 8.5). Tant que la release n'est pas publiée, les scripts répondent `[??]`, jamais `[OK]`.
-- **Branches en fin de vie** (7.x, 8.0, 8.1) : détectées via la liste `supported_versions` de php.net et signalées `[VULN]`, car elles n'auront aucun fix.
-- **Paquets de distribution** : Debian/Ubuntu et RHEL rétroportent le fix sans changer le numéro de version. Le paquet est donc jugé sur son changelog (CVE citées) **ou** sur sa version upstream (Alpine, Sury, Remi).
-- **Docker** : conteneurs `php` et FrankenPHP, et tags figés repérés d'après la date du dernier push sur Docker Hub.
+- **Fixed version**: read live from php.net, per branch (8.2 to 8.5). Until the release is out, the scripts answer `[??]`, never `[OK]`.
+- **End-of-life branches** (7.x, 8.0, 8.1): detected through php.net's `supported_versions` list and reported `[VULN]`, since they will get no fix.
+- **Distro packages**: Debian/Ubuntu and RHEL backport fixes without bumping the version number. A package is therefore judged on its changelog (CVEs cited) **or** on its upstream version (Alpine, Sury, Remi).
+- **Docker**: `php` and FrankenPHP containers, plus frozen tags spotted from their last push date on Docker Hub.
 
-## Prérequis
+## Requirements
 
-- Linux, avec GNU `date`, bash 4+ et `curl`.
-- `docker` : optionnel, utile seulement pour les conteneurs et les images.
-- `ssh` pour `servers-check.sh`.
-- Testé sur Ubuntu, Debian 13, Alpine et Rocky Linux 9. **Pas testé sur macOS.**
+- Linux, with GNU `date`, bash 4+ and `curl`.
+- `docker`: optional, only needed for containers and images.
+- `ssh` for `servers-check.sh`.
+- Tested on Ubuntu, Debian 13, Alpine and Rocky Linux 9. **Not tested on macOS.**
 
 ## Installation
 
@@ -50,122 +46,122 @@ git clone https://github.com/MakFly/php2shell-check.git
 cd php2shell-check
 ```
 
-Aucune dépendance à installer : ce sont des scripts Bash autonomes (`lib.sh` contient les fonctions communes).
+Nothing to install: these are standalone Bash scripts (`lib.sh` holds the shared functions).
 
-## Utilisation
+## Usage
 
-Chaque ligne de résultat commence par un état :
+Each result line starts with a status:
 
-| Marqueur | Sens |
+| Marker | Meaning |
 |---|---|
-| `[OK]` | Version corrigée (ou changelog qui cite les CVE). |
-| `[VULN]` | Version vulnérable, pré-version ou branche en fin de vie. |
-| `[??]` | Indéterminé : release pas encore publiée, socket Docker inaccessible, PHP introuvable... |
+| `[OK]` | Fixed version (or a changelog citing the CVEs). |
+| `[VULN]` | Vulnerable version, pre-release, or end-of-life branch. |
+| `[??]` | Unknown: release not published yet, Docker socket not reachable, PHP not found... |
 
-### check.sh : cet hôte
+### check.sh: this host
 
 ```bash
 ./check.sh
-sudo ./check.sh   # si le socket Docker demande des droits
+sudo ./check.sh   # if the Docker socket requires privileges
 ```
 
-Contrôle les paquets deb, rpm et apk, les binaires hors paquet (compilation, `/opt`, asdf, Homebrew...) et les conteneurs en cours d'exécution. Code de sortie `0` si tout est patché, `1` si au moins un runtime est vulnérable ou inconnu.
+Checks deb, rpm and apk packages, binaries outside any package (source builds, `/opt`, asdf, Homebrew...) and running containers. Exit code `0` if everything is patched, `1` if at least one runtime is vulnerable or unknown.
 
-### apply.sh : appliquer le correctif sur cet hôte
+### apply.sh: apply the fix on this host
 
 ```bash
 ./apply.sh
 ```
 
-Met à jour les paquets PHP (apt, dnf/yum, apk), redémarre les services PHP et serveur web, liste les conteneurs à reconstruire, puis lance `check.sh` (dont le code de sortie est repris). Utilise `sudo` si vous n'êtes pas root. Les images Docker ne sont pas reconstruites ici.
+Upgrades PHP packages (apt, dnf/yum, apk), restarts PHP and web server services, lists the containers to rebuild, then runs `check.sh` (and returns its exit code). Uses `sudo` when not run as root. Docker images are not rebuilt here.
 
-### servers-check.sh : serveurs distants
+### servers-check.sh: remote servers
 
 ```bash
-cp servers.txt.example servers.txt   # une cible SSH par ligne
-./servers-check.sh                   # tous les serveurs de servers.txt
-./servers-check.sh web-01 ops@203.0.113.10   # ou des hôtes explicites
+cp servers.txt.example servers.txt   # one SSH target per line
+./servers-check.sh                   # every server in servers.txt
+./servers-check.sh web-01 ops@203.0.113.10   # or explicit hosts
 ```
 
-Envoie `probe.sh` (lecture seule, POSIX sh) en SSH sur chaque cible et juge ce qu'il trouve : binaires, paquets, conteneurs. Rien n'est installé à distance. Pour un paquet de distribution, la version upstream peut masquer un rétroportage : le script affiche alors `[??]` et vous invite à lancer `check.sh` sur l'hôte.
+Pipes `probe.sh` (read-only, POSIX sh) to each target over SSH and judges what it finds: binaries, packages, containers. Nothing is installed remotely. For a distro package, the upstream version may hide a backport: the script then prints `[??]` and asks you to run `check.sh` on that host.
 
-Codes de sortie : `0` tout est patché, `1` au moins un serveur injoignable, vulnérable ou inconnu, `2` si `servers.txt` est absent (et qu'aucun hôte n'est passé en argument).
+Exit codes: `0` everything is patched, `1` at least one server is unreachable, vulnerable or unknown, `2` if `servers.txt` is missing (and no host is passed as an argument).
 
-Le compte SSH doit pouvoir exécuter `sudo -n docker` pour voir les conteneurs.
+The SSH account must be able to run `sudo -n docker` to see containers.
 
-### docker-scan.sh : Dockerfiles et compose
+### docker-scan.sh: Dockerfiles and compose files
 
 ```bash
 ./docker-scan.sh ~/code
-NO_PULL=1 ./docker-scan.sh ~/code    # sans télécharger les images
+NO_PULL=1 ./docker-scan.sh ~/code    # without pulling images
 ```
 
-Liste les images PHP de base des Dockerfiles et fichiers compose du dossier (courant par défaut), résout les `ARG` par défaut, classe chaque référence (`pin`, `exact`, `rolling`, `frozen(Nj)`) et lit la version PHP de l'image. Code de sortie `0` ou `1` comme `check.sh`.
+Lists the PHP base images referenced by the Dockerfiles and compose files of a folder (current directory by default), resolves `ARG` defaults, classifies each reference (`pin`, `exact`, `rolling`, `frozen(Nj)`, where `j` stands for days) and reads the PHP version inside the image. Exit code `0` or `1`, like `check.sh`.
 
-### docker-bump.sh : ré-épingler les digests
+### docker-bump.sh: re-pin digests
 
 ```bash
-DRY_RUN=1 ./docker-bump.sh path/to/Dockerfile   # affiche seulement
+DRY_RUN=1 ./docker-bump.sh path/to/Dockerfile   # print only
 ./docker-bump.sh path/to/Dockerfile
 ```
 
-Remplace chaque `image@sha256:` par le digest actuel du tag, **seulement si** l'image contient la version corrigée. Sinon l'ancien pin est conservé et le code de sortie est `1`.
+Replaces each `image@sha256:` with the current digest of its tag, **only if** that image ships the fixed version. Otherwise the old pin is kept and the exit code is `1`.
 
-### frankenphp-selfbuild.sh : FrankenPHP sans attendre
+### frankenphp-selfbuild.sh: FrankenPHP without waiting
 
 ```bash
 ./frankenphp-selfbuild.sh 8.4.27 trixie v1.13.1
-SHIP_TO=user@node ./frankenphp-selfbuild.sh 8.4.27   # docker load sur un nœud distant
+SHIP_TO=user@node ./frankenphp-selfbuild.sh 8.4.27   # docker load on a remote node
 ```
 
-Solution provisoire : construit une image FrankenPHP sur `php:X.Y.Z-zts` corrigé, sans attendre le rebuild quotidien amont (04:00 UTC). Arguments : `PHP_VERSION [OS] [FRANKENPHP_TAG]`. Lance un vrai build multi-étapes (clone de `php/frankenphp` dans `build/`, `docker buildx bake`). Code de sortie `1` si la version demandée n'est pas la version corrigée ou si l'image officielle n'est pas encore sur Docker Hub.
+Stopgap: builds a FrankenPHP image on the fixed `php:X.Y.Z-zts` image, without waiting for the upstream daily rebuild (04:00 UTC). Arguments: `PHP_VERSION [OS] [FRANKENPHP_TAG]`. Runs a real multi-stage build (clones `php/frankenphp` into `build/`, then `docker buildx bake`). Exit code `1` if the requested version is not the fixed one, or if the official image is not on Docker Hub yet.
 
-### watch.sh : mode observation
+### watch.sh: observe mode
 
 ```bash
 ./watch.sh
 INTERVAL=5 ./watch.sh
 ```
 
-Boucle jusqu'à interruption (Ctrl+C) et affiche une ligne `ALERT` quand un shell ou un outil réseau (`sh`, `bash`, `python`, `perl`, `curl`, `wget`, `nc`, `socat`...) est lancé par un process PHP ou serveur web.
+Loops until interrupted (Ctrl+C) and prints an `ALERT` line whenever a shell or a network tool (`sh`, `bash`, `python`, `perl`, `curl`, `wget`, `nc`, `socat`...) is spawned by a PHP or web server process.
 
-## Variables d'environnement
+## Environment variables
 
-| Variable | Scripts | Rôle |
+| Variable | Scripts | Purpose |
 |---|---|---|
-| `RELEASE_DATE` | tous (via `lib.sh`) | Date de la release de sécurité portant le fix. Défaut : `2026-10-21`. |
-| `CVES` | tous (via `lib.sh`) | CVE que doit citer un changelog de distribution. Défaut : `CVE-2026-109618 CVE-2026-109619`. À changer si l'avis officiel évolue. |
-| `NO_COLOR` | tous (via `lib.sh`) | Si définie, désactive les couleurs. |
-| `NO_PULL` | `docker-scan.sh` | Si définie, ne télécharge pas les images et ne lit pas leur version PHP. |
-| `STALE_DAYS` | `docker-scan.sh` | Âge en jours au-delà duquel un tag Docker Hub est dit figé. Défaut : `30`. |
-| `DRY_RUN` | `docker-bump.sh` | Si définie, affiche les changements sans modifier les fichiers. |
-| `SHIP_TO` | `frankenphp-selfbuild.sh` | Cible SSH (`user@node`) où charger l'image construite avec `docker load`. |
-| `INTERVAL` | `watch.sh` | Secondes entre deux relevés. Défaut : `2`. |
+| `RELEASE_DATE` | all (through `lib.sh`) | Date of the security release carrying the fix. Default: `2026-10-21`. |
+| `CVES` | all (through `lib.sh`) | CVEs a distro changelog must cite. Default: `CVE-2026-109618 CVE-2026-109619`. Change it if the official advisory differs. |
+| `NO_COLOR` | all (through `lib.sh`) | When set, disables colors. |
+| `NO_PULL` | `docker-scan.sh` | When set, does not pull images nor read their PHP version. |
+| `STALE_DAYS` | `docker-scan.sh` | Age in days after which a Docker Hub tag counts as frozen. Default: `30`. |
+| `DRY_RUN` | `docker-bump.sh` | When set, prints the changes without editing files. |
+| `SHIP_TO` | `frankenphp-selfbuild.sh` | SSH target (`user@node`) where the built image is loaded with `docker load`. |
+| `INTERVAL` | `watch.sh` | Seconds between two scans. Default: `2`. |
 
-## Pièges rencontrés
+## Pitfalls we hit
 
-- **Un `docker restart` ne patche rien** : il faut reconstruire avec `--pull` puis redéployer.
-- **FrankenPHP embarque PHP** dans l'image et dans le binaire statique. Mettre à jour le PHP de l'hôte n'y change rien.
-- **Les tags mineurs FrankenPHP se figent** : `1.9-php8.4` est resté en PHP 8.4.15. Préférer `1-phpX.Y`.
-- **Un digest épinglé sans propriétaire dérive** : confiez-le à Renovate ou Dependabot.
+- **A `docker restart` patches nothing**: rebuild with `--pull`, then redeploy.
+- **FrankenPHP embeds PHP** in its image and in its static binary. Upgrading the host's PHP changes nothing for it.
+- **FrankenPHP minor tags freeze**: `1.9-php8.4` stayed on PHP 8.4.15. Prefer `1-phpX.Y`.
+- **A pinned digest nobody owns drifts**: hand it to Renovate or Dependabot.
 
-## Limites
+## Limitations
 
-- Linux uniquement (GNU `date`, bash 4+, `curl`). Testé sur Ubuntu, Debian 13, Alpine et Rocky Linux 9. Pas testé sur macOS.
-- `frankenphp-selfbuild.sh` lance un vrai build multi-étapes : relisez-le avant usage.
-- Les identifiants CVE viennent des chercheurs et du CERT-EU, pas de l'annonce PHP. Vérifiez l'avis officiel sur php.net après la publication.
-- Fourni tel quel, sans garantie. Testez d'abord en préproduction.
+- Linux only (GNU `date`, bash 4+, `curl`). Tested on Ubuntu, Debian 13, Alpine and Rocky Linux 9. Not tested on macOS.
+- `frankenphp-selfbuild.sh` runs a real multi-stage build: read it before use.
+- The CVE identifiers come from researchers and CERT-EU, not from the PHP announcement. Check the official advisory on php.net once it is published.
+- Provided as is, without warranty. Test in staging first.
 
-## Sécurité
+## Security
 
-- Les scripts sont en **lecture seule**, sauf `apply.sh` (met à jour les paquets et redémarre des services), `docker-bump.sh` (réécrit vos fichiers) et `frankenphp-selfbuild.sh` (construit et peut charger une image sur un nœud distant).
-- `probe.sh` n'installe rien sur les serveurs : il liste seulement les runtimes PHP visibles.
-- Relisez un script avant de le lancer en root.
-- `servers.txt` (votre inventaire réel) est ignoré par Git : ne le committez jamais.
+- The scripts are **read-only**, except `apply.sh` (upgrades packages and restarts services), `docker-bump.sh` (rewrites your files) and `frankenphp-selfbuild.sh` (builds an image and can load it on a remote node).
+- `probe.sh` installs nothing on servers: it only lists the PHP runtimes it can see.
+- Read a script before running it as root.
+- `servers.txt` (your real inventory) is ignored by Git: never commit it.
 
-## Contribuer
+## Contributing
 
-Les issues et les pull requests sont les bienvenues. Avant d'ouvrir une PR, vérifiez la syntaxe de chaque script :
+Issues and pull requests are welcome. Before opening a PR, check the syntax of every script:
 
 ```bash
 for f in *.sh; do bash -n "$f"; done
@@ -178,6 +174,6 @@ sh -n probe.sh
 - https://sansec.io/research/php2shell
 - https://www.huntress.com/blog/php2shell-leaked-critical-php-vulnerabilities
 
-## Licence
+## License
 
-Licence : pas encore définie.
+Not defined yet.
