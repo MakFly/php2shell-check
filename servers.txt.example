@@ -1,0 +1,4 @@
+# One SSH target per line: an alias from ~/.ssh/config or user@host.
+# Use an account that can run `sudo -n docker` to see the containers.
+# web-01
+# ops@203.0.113.10
