@@ -14,7 +14,11 @@ check_deb() {
   local pkg ver
   for pkg in $(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'php[0-9]*-common' 'php-common' 2>/dev/null | awk '$1 == "ii" && $2 != "php-common" {print $2}'); do
     ver=$(dpkg-query -W -f='${Version}' "$pkg")
-    verdict_pkg "deb $pkg" "$ver" "$(apt-get changelog "$pkg" 2>/dev/null | head -400)" || status=1
+    # The installed package ships its own changelog; apt-get changelog needs the
+    # network and returns 404 for fresh security uploads (Ubuntu, 2026-10).
+    local cl="/usr/share/doc/$pkg/changelog.Debian.gz" log
+    log=$( { [ -r "$cl" ] && zcat "$cl" 2>/dev/null || apt-get changelog "$pkg" 2>/dev/null; } | head -400)
+    verdict_pkg "deb $pkg" "$ver" "$log" || status=1
   done
 }
 
